@@ -9,7 +9,11 @@ TimeTraveler Backup Utility
 > Pull requests welcome....
 >
 
-Timetraveler is an rsync-based backup utility that formalizes the process of maintaining delta backups. High among its design goals is ease of use by end users. To this end, it is based on a simple, user-editable config file that controls what file tree is backed up, where backups are stored, how often backups happen, and how and when to clean up old backups.
+Timetraveler is an rsync-based backup utility that attempts to make creating and managing incremental backups easy. High among its design goals is ease of use by end users. To this end, it is based on a simple, user-defined config file that controls what file tree is backed up, where backups are stored, how often backups happen, and how and when to clean up old backups.
+
+It works by using rsync to copy the source directory into a date-stamped subdirectory of the backups directory. After the first backup, it creates a symlink called `latest` that it uses to create further backups incrementally using rsync's `--link-dest` option. (Of course, this symlink always points to the latest backup.)
+
+For safety, it then removes write permissions for all files and directories under the backups directory.
 
 
 ## Installation
