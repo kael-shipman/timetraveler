@@ -33,8 +33,8 @@ Sample config might look like this:
 {
     backups: {
         my-full-system-backup: {
-            source-dir: /path/to/source
-            backup-dir: /path/to/backup-dir
+            source: /path/to/source
+            target: /path/to/backup-dir
             frequency: *-*-* 00:00 // Every night at midnight
             retention: all // Don't delete any backups
         }
@@ -69,11 +69,16 @@ $     4. 2018-04-20 00:30:33
 $
 ```
 
-### Additional Config Options
+### Config Option Details
 
-In addition to the basic config options outlined above, timetraveler also recognizes the following profile-specific config options:
+Following is the full list of config options that timetraveler recognizes:
 
-* `rsync-options` -- A string of extra options to append to the rsync command
+* `backups` object (required) -- an object containing named profiles representing one or more backup configurations. Keys of this object should be the name of the profile, and the value should be an object with the following properties
+    * `source` string (required) -- rsync-compatible remote or local path to the directory you'd like to make backups of.
+    * `target` string (required) -- rsync-compatible remote or local path to the directory where you'd like to keep all of your versioned backups for this profile.
+    * `frequency` string (optional, defaults to `*-*-* 00:00`) -- 'never' (for manual backups only), or a systemd-compatible timer specification for regular automated backups
+    * `retention` string (optional, defaults to `all`) -- How old backups should be managed
+    * `rsync-options` -- A string of extra options to append to the rsync command
 
 
 ## Implementation Details
