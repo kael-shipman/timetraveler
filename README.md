@@ -23,11 +23,34 @@ Like most applications that you run on your file system, timetraveler should be 
 
 ## Usage
 
-Timetraveler takes a config-file approach to backups. On install, it will run `timetraveler scan-config`, which checks the config directory (`$XDG_CONFIG_HOME/timetraveler/config`, which defaults to `$HOME/.config/timetraveler/config`) and creates, updates, or deletes any systemd timer unit files as necessary.
+```sh
+ timetraveler [global options] [command] [command-options] [subcommand] ....
 
-To create an automatic backup routine, all you have to do is create a config file, `~/.config/timetraveler/config`, in which you'll maintain one or more backup profiles. Each profile must have at a minimum a source directory, a destination directory, backup frequency (defined in [`systemd` calendar event syntax](https://wiki.archlinux.org/index.php/Systemd/Timers)), and retention policy.
+ COMMANDS
 
-Sample config might look like this:
+    backup [profile]|all                           Run the specified backup (or all backups if "all" specified)
+    scan-config                                    Scan user configs and update systemd unit files accordingly
+    find [profile] [relative-path] [find-options]  Find instances of files or folders within the backups
+    search [profile] [relative-path] [regex]       Search files in [profile]/[relative-path] for [regex]
+
+
+ BACKUP OPTIONS
+
+    --rsync-command|-r                             The rsync command to use, if not on standard path
+    --rsync-options|-o                             Extra options to append to the rsync command
+
+
+ FIND OPTIONS
+
+    (This command is a pass-through for `find`. See `find` command man page for options)
+```
+
+
+Timetraveler takes a config-file approach to backups. On install, it will run `timetraveler scan-config`, which checks the config directory (`$XDG_CONFIG_HOME/timetraveler/config`, which defaults to `$HOME/.config/timetraveler/config`) and creates, updates, or deletes any systemd timer unit files as necessary. It also installs a systemd timer unit to run `scan-config` once daily to pick up new changes, though you can also run the command yourself after updates.
+
+To create an automatic backup routine, all you have to do is create the above-mentioned config file, in which you'll maintain one or more backup profiles. Each profile must have at a minimum a source directory, a destination directory, backup frequency (defined in [`systemd` calendar event syntax](https://wiki.archlinux.org/index.php/Systemd/Timers)), and retention policy.
+
+Backups can be written in json or [hjson](https://hjson.org). Sample config might look like this:
 
 ```hjson
 {
@@ -50,7 +73,7 @@ As noted above, backups typically run automatically (though you can disable this
 
 Each incremental backup is simply a full copy of your files, but using hardlinks to prior backups when possible to economize on space.
 
-Since it can get confusing and cumbersome to find files among hundreds or even thousands of backups, timetraveler provides facilities for accessing backups. In particular, it offers search capabilities that allow you to find files or directories by name or even by file contents. When listing files or directories, timetraveler will show you all _changed_ versions of a file and allow you to view the file or copy it to a temporary location for manipulation or further inspection. Here's an example of timetraveler's search:
+Since it can get confusing and cumbersome to find files among hundreds or even thousands of such backups, timetraveler provides facilities for accessing backups. In particular, it offers search capabilities that allow you to find files or directories by name or even by file contents. When listing files or directories, timetraveler will show you all _changed_ versions of a file and allow you to view the file or copy it to a temporary location for manipulation or further inspection. Here's an example of timetraveler's search:
 
 ```sh
 $ timetraveler find my-backup /some/search/root -type f -name my-file.txt
@@ -77,8 +100,9 @@ Following is the full list of config options that timetraveler recognizes:
     * `source` string (required) -- rsync-compatible remote or local path to the directory you'd like to make backups of.
     * `target` string (required) -- rsync-compatible remote or local path to the directory where you'd like to keep all of your versioned backups for this profile.
     * `frequency` string (optional, defaults to `*-*-* 00:00`) -- 'never' (for manual backups only), or a systemd-compatible timer specification for regular automated backups
-    * `retention` string (optional, defaults to `all`) -- How old backups should be managed
-    * `rsync-options` -- A string of extra options to append to the rsync command
+    * `retention` string (optional, defaults to `all`) -- How old backups should be managed (may be profile-specific or global or both)
+    * `rsync-options` string (optional) -- A string of extra options to append to the rsync command (may be profile-specific or global or both)
+* `rsync-command` string (optional) -- The full path the rsync command to use, if not on standard path
 
 
 ## Implementation Details
