@@ -1,0 +1,77 @@
+#!/bin/bash
+
+set -e
+D="$(dirname "$(readlink -f "$0")")"
+if [ ! -e "$D/timetraveler.lib.sh" ]; then
+    >&2 echo
+    >&2 echo "E: Expected to find timetraveler.lib.sh in $D, but didn't"
+    >&2 echo
+    exit 1
+else
+    . "$D/timetraveler.lib.sh"
+fi
+
+
+VERSION=0.1.0
+
+# Initial loop to gather global options and main command
+while test $# -gt 0; do
+    case "$1" in
+        backup|scan-config|find|search)
+            COMMAND="$1"
+            shift
+            break
+
+        ;;
+
+        -h|--help)
+            echo_usage
+            exit
+        ;;
+
+        --version)
+            echo
+            echo "$(basename "$0") version $VERSION"
+            echo
+            echo "See readme and license information, file bug reports, and view source code at"
+            echo "https://github.com/kael-shipman/timetraveler"
+            echo
+            exit
+        ;;
+
+        # No other global options for now, so everything else is an error
+        *)
+            >&2 echo
+            >&2 echo "E: Illegal command or option '$1'"
+            >&2 echo
+            echo_usage >&2
+            exit 1
+        ;;
+    esac
+done
+
+
+
+# Validate empties
+if [ -z ${COMMAND+x} ]; then
+    >&2 echo
+    >&2 echo "E: You haven't passed a command!"
+    >&2 echo
+    echo_usage >&2
+    exit 2
+fi
+
+
+
+# Run subcommand
+
+if [ -e "$D/timetraveler-$COMMAND" ]; then
+    "$D/timetraveler-$COMMAND" $@
+else
+    >&2 echo
+    >&2 echo "E: Couldn't find subcommand timetraveler-$COMMAND in $D!"
+    >&2 echo
+    >&2 echo "This is an error that the maintainer should fix...."
+    >&2 echo
+fi
+

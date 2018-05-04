@@ -1,0 +1,229 @@
+#!/bin/bash
+
+set -e
+D="$(dirname "$(readlink -f "$0")")"
+if [ ! -e "$D/timetraveler.lib.sh" ]; then
+    >&2 echo
+    >&2 echo "E: Expected to find timetraveler.lib.sh in $D, but didn't"
+    >&2 echo
+    exit 1
+else
+    . "$D/timetraveler.lib.sh"
+fi
+
+
+function show_backup_help() {
+    {
+        echo
+        echo "USAGE"
+        echo 
+        echo "timetraveler backup (-h|--help) [profile]|all"
+        echo
+        echo
+        echo " OPTIONS"
+        echo
+        echo "    -r|--rsync-command                             The rsync command to use, if not on standard path"
+        echo "    -o|--rsync-options                             Extra options to append to the rsync command"
+        echo
+    }
+}
+
+
+if ! RSYNC="$(command -v rsync)"; then
+    RSYNC=
+fi
+RSYNC_OPTIONS=
+
+
+# Initial loop to gather global options and main command
+while test $# -gt 0; do
+    case "$1" in
+        -r|--rsync-command)
+            RSYNC="$1"
+            shift
+        ;;
+
+        -o|--rsync-options)
+            RSYNC_OPTIONS="$1"
+            shift
+        ;;
+
+        -h|--help)
+            show_backup_help
+            exit
+        ;;
+
+        all)
+            PROFILE=all
+            shift
+        ;;
+
+        *)
+            if [ -z ${PROFILE+x} ] && [[ "$1" != -* ]]; then
+                PROFILE="$1"
+                shift
+            else
+                >&2 echo
+                >&2 echo "E: Illegal command or option '$1'"
+                >&2 echo
+                show_backup_help >&2
+                exit 1
+            fi
+        ;;
+    esac
+done
+
+
+
+if [ -z ${PROFILE+x} ]; then
+    >&2 echo
+    >&2 echo "E: You must provide a valid backup profile to run, or 'all' to run all backups"
+    >&2 echo
+    show_backup_help >&2
+    exit 2
+fi
+
+
+# Verify config file exists and we have necessary dependencies to proceed
+
+CONF_DIR="$HOME/.config/timetraveler"
+CONF_FILE="$CONF_DIR/config"
+if [ ! -d "$CONF_DIR" ]; then
+    mkdir -p "$CONF_DIR"
+fi
+
+if [ ! -e "$CONF_FILE" ]; then
+    >&2 echo
+    >&2 echo "E: You haven't created a config file yet!"
+    >&2 echo
+    >&2 echo "   Please create the file ~/.config/timetraveler/config and put your timetraveler"
+    >&2 echo "   config, including backup profiles, in it. (See https://github.com/kael-shipman/timetraveler"
+    >&2 echo "   for more information about config.)"
+    >&2 echo
+    exit 3
+else
+    if ! jq="$(command -v jq)"; then
+        >&2 echo
+        >&2 echo "E: You must have \`jq\` installed on your machine to use timetraveler."
+        >&2 echo
+        exit 4
+    fi
+fi
+
+
+
+# Parse config file
+
+parse_config "$CONF_FILE"
+
+
+
+
+
+# If we're running all profiles, just copy the profiles array
+if [ "$PROFILE" == 'all' ]; then
+    RUN_PROFILES=( "${CNF_PRFS[@]}" )
+
+# Else, load the profile we're running
+else
+    RUN_PROFILES=( "$PROFILE" )
+
+fi
+
+
+
+
+
+# Now run all applicable backups
+
+for prf in "${RUN_PROFILES[@]}"; do
+    # Save global options in case of profile-specific override
+    ORIG_RSYNC="$RSYNC"
+    ORIG_RSYNC_OPTS="$RSYNC_OPTIONS"
+
+
+
+    # Find the profile we've requested (or exit with error)
+    PROF_NUM=0
+    for p in "${CNF_PRFS[@]}"; do
+        if [ "$p" == "$prf" ]; then
+            break
+        fi
+        !((PROF_NUM++))
+    done
+    if [ "$PROF_NUM" -ge "${#CNF_PRFS[@]}" ]; then
+        >&2 echo
+        >&2 echo "E: The profile you've specified ('$prf') does not appear to be"
+        >&2 echo "   defined in your config file. ($PROF_NUM -ge ${#CNF_PRFS[@]})"
+        >&2 echo
+        exit 7
+    fi
+
+
+
+    # Override globals with profile-specific variables, for applicable variables
+
+    if [ "${CNF_PRFS_RSYNCS[$PROF_NUM]}" != "null" ]; then
+        RSYNC="${CNF_PRFS_RSYNCS[$PROF_NUM]}"
+    fi
+    if [ "${CNF_PRFS_RSYNC_OPTS[$PROF_NUM]}" != "null" ]; then
+        RSYNC_OPTIONS="${CNF_PRFS_RSYNC_OPTS[$PROF_NUM]}"
+    fi
+
+
+
+
+
+    # Do the backup
+
+    src="${CNF_PRFS_SRCS[$PROF_NUM]}"
+    bakdir="${CNF_PRFS_TRGS[$PROF_NUM]}"
+
+    bakname="$(basename "$src").$(date +%F_%H-%M-%S)"
+
+    # Canonicalize source and backup dir and check for existence
+    if ! src="$(readlink -f "$src")" || [ ! -d "$src" ]; then
+        >&2 echo
+        >&2 echo "E: The source directory you've specified doesn't exist! Is it on removable"
+        >&2 echo "   media? (Source: $src)"
+        >&2 echo
+        exit 8
+    fi
+    if ! bakdir="$(readlink -f "$bakdir")"; then
+        >&2 echo
+        >&2 echo "E: The backup directory you've specified doesn't exist! Is it on removable"
+        >&2 echo "   media? (Dir: $bakdir)"
+        >&2 echo
+        exit 8
+    fi
+
+    # If the backup directory doesn't exist, create it
+    if [ ! -d "$bakdir" ]; then
+        mkdir -p "$bakdir"
+    fi
+
+    dest="$bakdir/$bakname"
+
+    echo
+    echo "Creating backup of '$src' at '$dest'...."
+    echo
+
+    if [ -e "$bakdir/latest" ]; then
+        linkdest="$(readlink -f "$bakdir/latest")"
+        $RSYNC -aHAXx --link-dest="$linkdest" $RSYNC_OPTIONS "$src/" "$dest"
+    else
+        $RSYNC -aHAXx $RSYNC_OPTIONS "$src/" "$dest"
+    fi
+
+    echo
+    echo "Linking latest backup"
+    ln -snf "$bakname" "$bakdir/latest"
+
+    echo "Completed backup for profile '$prf'"
+
+
+    # Set global options back to defaults
+    RSYNC="$ORIG_RSYNC"
+    RSYNC_OPTIONS="$ORIG_RSYNC_OPTS"
+done
+
