@@ -2,17 +2,23 @@
 
 set -e
 D="$(dirname "$(readlink -f "$0")")"
-if [ ! -e "$D/timetraveler.lib.sh" ]; then
+for libdir in "$TT_LIBDIR" /usr/share/timetraveler "$D"; do
+    if [ -e "$libdir/timetraveler.lib.sh" ]; then
+        . "$libdir/timetraveler.lib.sh"
+        lib_loaded=true
+        break
+    fi
+done
+if [ "$lib_loaded" != "true" ]; then
     >&2 echo
-    >&2 echo "E: Expected to find timetraveler.lib.sh in $D, but didn't"
+    >&2 echo "E: Couldn't find timetraveler libraries! Are you sure you've installed"
+    >&2 echo "   timetraveler correctly?"
     >&2 echo
     exit 1
-else
-    . "$D/timetraveler.lib.sh"
 fi
 
 
-VERSION=0.1.0
+export TT_VERSION=0.1.1
 
 # Initial loop to gather global options and main command
 while test $# -gt 0; do
@@ -31,7 +37,7 @@ while test $# -gt 0; do
 
         --version)
             echo
-            echo "$(basename "$0") version $VERSION"
+            echo "$(basename "$0") version $TT_VERSION"
             echo
             echo "See readme and license information, file bug reports, and view source code at"
             echo "https://github.com/kael-shipman/timetraveler"
@@ -65,13 +71,18 @@ fi
 
 # Run subcommand
 
-if [ -e "$D/timetraveler-$COMMAND" ]; then
-    "$D/timetraveler-$COMMAND" $@
-else
-    >&2 echo
-    >&2 echo "E: Couldn't find subcommand timetraveler-$COMMAND in $D!"
-    >&2 echo
-    >&2 echo "This is an error that the maintainer should fix...."
-    >&2 echo
+# See if it's on the path
+if ! CMD="$(command -v "timetraveler-$COMMAND")"; then
+    # Otherwise, see if it's in the same directory as the current file
+    CMD="$D/timetraveler-$COMMAND"
+    if [ ! -e "$CMD" ]; then
+        >&2 echo
+        >&2 echo "E: Couldn't find subcommand timetraveler-$COMMAND! Are you sure timetraveler"
+        >&2 echo "   is properly installed?"
+        >&2 echo
+        exit 3
+    fi
 fi
+
+"$CMD" $@
 

@@ -1,0 +1,136 @@
+#!/bin/bash
+
+set -e
+D="$(dirname "$(readlink -f "$0")")"
+for libdir in "$TT_LIBDIR" /usr/share/timetraveler "$D"; do
+    if [ -e "$libdir/timetraveler.lib.sh" ]; then
+        . "$libdir/timetraveler.lib.sh"
+        lib_loaded=true
+        break
+    fi
+done
+if [ "$lib_loaded" != "true" ]; then
+    >&2 echo
+    >&2 echo "E: Couldn't find timetraveler libraries! Are you sure you've installed"
+    >&2 echo "   timetraveler correctly?"
+    >&2 echo
+    exit 1
+fi
+
+
+function show_scanconfig_help() {
+    {
+        echo
+        echo " SYNOPSIS"
+        echo "      timetraveler scan-config (-h|--help)"
+        echo
+        echo " DESCRIPTION"
+        echo "      (Re)Scan timetraveler configuration file and rebuild systemd timers accordingly."
+        echo
+        echo "      Timetraveler uses systemd tiemrs to implement backup scheduling. Timers are"
+        echo "      specified in the 'frequency' key of each backup profile (or default to once weekly,"
+        echo "      '*-*-1 00:00') and are defined according to systemd's 'OnCalendar' specification."
+        echo
+        echo "      See https://wiki.archlinux.org/index.php/Systemd/Timers for more information."
+        echo
+        echo
+    }
+}
+
+
+# Loop to gather options
+while test $# -gt 0; do
+    case "$1" in
+        -h|--help)
+            show_scanconfig_help
+            exit
+        ;;
+
+        *)
+            >&2 echo
+            >&2 echo "E: Illegal command or option '$1'"
+            >&2 echo
+            show_scanconfig_help >&2
+            exit 1
+        ;;
+    esac
+done
+
+
+
+# Parse config file
+
+verify_config # Sets TT_CONF_FILE
+parse_config "$TT_CONF_FILE" # Sets CNF_PRFS* variables
+
+
+
+# Make sure we've got permissions
+
+if [ "$(whoami)" != "root" ]; then
+    >&2 echo
+    >&2 echo "E: Please run this program using sudo"
+    >&2 echo
+    exit 9
+fi
+
+
+
+# Now run through backup profiles and create systemd files
+
+pn=0
+for prf in "${CNF_PRFS[@]}"; do
+    SERVICE_FILE=/etc/systemd/system/timetraveler-"$prf".service
+    TIMER_FILE=/etc/systemd/system/timetraveler-"$prf".timer
+    if ! CMD="$(command -v timetraveler)"; then
+        CMD="$(dirname "$(readlink -f "$0")")"
+    fi
+    INTERVAL="${CNF_PRFS_FREQUENCIES[$pn]}"
+    if [ -z "$INTERVAL" ] || [ "$INTERVAL" == "null" ]; then
+        INTERVAL="*-*-* 00:00"
+    fi
+    if [ -n "$SUDO_USER" ]; then
+        u="$SUDO_USER"
+    else
+        u="$USER"
+    fi
+    if [ "$u" == "root" ]; then
+        >&2 echo
+        >&2 echo "W: You appear to be running this script as root. You should use sudo"
+        >&2 echo "   instead so your backups are owned by your own user."
+        >&2 echo
+    fi
+
+    cat << EOF > "$SERVICE_FILE"
+[Unit]
+Description=Timetraveler backup for profile '$prf'
+
+[Service]
+User=$u
+Type=onshot
+ExecStart=$CMD backup "$prf"
+
+EOF
+
+    cat << EOF > "$TIMER_FILE"
+[Unit]
+Description=Run timetraveler backup profile '$prf' on schedule
+
+[Timer]
+OnCalendar=$INTERVAL
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+EOF
+
+    !((pn++))
+done
+
+# Reload systemd and enable everything
+systemctl daemon-reload
+for prf in "${CNF_PRFS[@]}"; do
+    systemctl enable --now "timetraveler-$prf.timer"
+done
+

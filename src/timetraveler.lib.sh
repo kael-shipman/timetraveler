@@ -5,35 +5,56 @@ set -e
 function echo_usage() {
     {
         echo
-        echo "USAGE"
+        echo "SYNOPSIS"
+        echo "      timetraveler [command] [command-options]"
         echo
-        echo " $(basename "$0") [command] [command-options]"
+        echo "COMMANDS"
+        echo "      backup [profile]|all"
+        echo "          Run the specified backup (or all backups if 'all' specified)"
         echo
-        echo " COMMANDS"
+        echo "      scan-config"
+        echo "          Scan user configs and update systemd unit files accordingly"
         echo
-        echo "    backup [profile]|all                           Run the specified backup (or all backups if 'all' specified)"
-        echo "    scan-config                                    Scan user configs and update systemd unit files accordingly"
-        echo "    find [profile] [relative-path] [find-options]  Find instances of files or folders within the backups"
-        echo "    search [profile] [relative-path] [regex]       Search files in [profile]/[relative-path] for [regex]"
+        echo "      find [profile] [relative-path] [find-options]"
+        echo "          Find instances of files or folders within the backups"
         echo
+        echo "      search [profile] [relative-path] [regex]"
+        echo "          Search files in [profile]/[relative-path] for [regex]"
         echo
-        echo " GLOBAL OPTIONS"
+        echo "GLOBAL OPTIONS"
+        echo "      -h|--help"
+        echo "          Show this help text. Note: you can also pass --help|-h to any subcommand"
+        echo "          to see more information about each."
         echo
-        echo "    -h|--help                                      Show this help text. Note: you can also pass --help|-h to"
-        echo "                                                   any subcommand to see more information about each."
-        echo "       --version                                   Display version information"
+        echo "      --version"
+        echo "          Display version information"
         echo
-        echo
-        echo " BACKUP OPTIONS"
-        echo
-        echo
-        echo
-        echo " FIND OPTIONS"
-        echo
-        echo "    (This command is a pass-through for \`find\`. See \`find\` command man page for options)"
         echo
         echo
     }
+}
+
+function verify_config() {
+    TT_CONF_DIR="$HOME/.config/timetraveler"
+    TT_CONF_FILE="$TT_CONF_DIR/config"
+
+    if [ ! -e "$TT_CONF_FILE" ]; then
+        >&2 echo
+        >&2 echo "E: You haven't created a config file yet!"
+        >&2 echo
+        >&2 echo "   Please create the file $TT_CONF_FILE and put your timetraveler config, including"
+        >&2 echo "   backup profiles, in it. (See https://github.com/kael-shipman/timetraveler for"
+        >&2 echo "   more information about config.)"
+        >&2 echo
+        exit 3
+    else
+        if ! jq="$(command -v jq)"; then
+            >&2 echo
+            >&2 echo "E: You must have \`jq\` installed on your machine to use timetraveler."
+            >&2 echo
+            exit 4
+        fi
+    fi
 }
 
 function parse_config() {
