@@ -79,15 +79,17 @@ fi
 # Now run through backup profiles and create systemd files
 
 pn=0
+declare -a ENABLE_TIMERS
 for prf in "${CNF_PRFS[@]}"; do
     SERVICE_FILE=/etc/systemd/system/timetraveler-"$prf".service
     TIMER_FILE=/etc/systemd/system/timetraveler-"$prf".timer
-    if ! CMD="$(command -v timetraveler)"; then
-        CMD="$(dirname "$(readlink -f "$0")")"
-    fi
     INTERVAL="${CNF_PRFS_FREQUENCIES[$pn]}"
     if [ -z "$INTERVAL" ] || [ "$INTERVAL" == "null" ]; then
         INTERVAL="*-*-* 00:00"
+    fi
+
+    if ! CMD="$(command -v timetraveler)"; then
+        CMD="$(dirname "$(readlink -f "$0")")/timetraveler"
     fi
     if [ -n "$SUDO_USER" ]; then
         u="$SUDO_USER"
@@ -101,18 +103,34 @@ for prf in "${CNF_PRFS[@]}"; do
         >&2 echo
     fi
 
+    # Augment profile pointer
+    !((pn++))
+
+    # Create service file
     cat << EOF > "$SERVICE_FILE"
 [Unit]
 Description=Timetraveler backup for profile '$prf'
 
 [Service]
 User=$u
-Type=onshot
+Type=simple
 ExecStart=$CMD backup "$prf"
 
 EOF
 
-    cat << EOF > "$TIMER_FILE"
+
+    # If interval is special value "never", delete timer and move on
+    if [ "$INTERVAL" == "never" ]; then
+        systemctl disable --now "$TIMER_FILE" 2>/dev/null || true
+        rm "$TIMER_FILE" 2>/dev/null || true
+
+    # Otherwise, add timer to list of timers to enable and (re)create timer unit file
+    else
+
+        # Add timer to list to enable
+        ENABLE_TIMERS[${#ENABLE_TIMERS[@]}]="$(basename "$TIMER_FILE")"
+
+        cat << EOF > "$TIMER_FILE"
 [Unit]
 Description=Run timetraveler backup profile '$prf' on schedule
 
@@ -124,13 +142,12 @@ Persistent=true
 WantedBy=timers.target
 
 EOF
-
-    !((pn++))
+    fi
 done
 
 # Reload systemd and enable everything
 systemctl daemon-reload
-for prf in "${CNF_PRFS[@]}"; do
-    systemctl enable --now "timetraveler-$prf.timer"
+for timer in "${ENABLE_TIMERS[@]}"; do
+    systemctl enable --now "$timer"
 done
 

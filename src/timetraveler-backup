@@ -25,8 +25,12 @@ function show_backup_help() {
         echo "      timetraveler backup (-h|--help) [profile]|all"
         echo
         echo "OPTIONS"
-        echo "      -r|--rsync-command                             The rsync command to use, if not on standard path"
-        echo "      -o|--rsync-options                             Extra options to append to the rsync command"
+        echo "      -r|--rsync-command [command]"
+        echo "          The rsync command to use, if not on standard path"
+        echo
+        echo "      -o|--rsync-options '[options]'"
+        echo "          Extra options to append to the rsync command (must be quoted so as not to be"
+        echo "          interpreted by timetraveler"
         echo
     }
 }
@@ -42,11 +46,13 @@ RSYNC_OPTIONS=
 while test $# -gt 0; do
     case "$1" in
         -r|--rsync-command)
+            shift
             RSYNC="$1"
             shift
         ;;
 
         -o|--rsync-options)
+            shift
             RSYNC_OPTIONS="$1"
             shift
         ;;
