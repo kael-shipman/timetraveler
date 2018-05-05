@@ -1,0 +1,18 @@
+Package: timetraveler
+Version: ::VERSION::
+Section: free
+Priority: optional
+Architecture: all
+Depends: jq
+Installed-Size: 0
+Maintainer: Kael Shipman <kael.shipman@gmail.com>
+Description: A TimeMachine knockoff for *nix
+ Timetraveler is a config file-based backup utility for *nix OSes. It
+ wraps rsync and other gnu utilities to do the actual work, but provides
+ a simple interface through a per-user config file.
+ .
+ On install, timetraveler will begin scanning for new configuration changes
+ once daily. It won't actually do anything until a user creates a config
+ file at ~/.config/timetraveler/config. When it does find such a file,
+ it will (optionally, depending on file contents) create systemd timer
+ files to run the specified backups at the specified intervals.

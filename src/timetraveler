@@ -18,7 +18,7 @@ if [ "$lib_loaded" != "true" ]; then
 fi
 
 
-export TT_VERSION=0.1.1
+export TT_VERSION="::VERSION::"
 
 # Initial loop to gather global options and main command
 while test $# -gt 0; do

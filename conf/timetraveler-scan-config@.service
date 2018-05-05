@@ -1,0 +1,6 @@
+[Unit]
+Description=Scan for updates to timetraveler configs across all users
+
+[Service]
+ExecStart=/usr/bin/timetraveler scan-config
+Type=simple

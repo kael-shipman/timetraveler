@@ -35,7 +35,14 @@ function echo_usage() {
 }
 
 function verify_config() {
-    TT_CONF_DIR="$HOME/.config/timetraveler"
+    local cnf_home="$1"
+    if [ -z "$cnf_home" ] || [ ! -d "$cnf_home" ]; then
+        >&2 echo
+        >&2 echo "E: You must pass a home directory as the only argument to this"
+        >&2 echo "   function. (You passed '$cnf_home')"
+        >&2 echo
+    fi
+    TT_CONF_DIR="$cnf_home/.config/timetraveler"
     TT_CONF_FILE="$TT_CONF_DIR/config"
 
     if [ ! -e "$TT_CONF_FILE" ]; then
@@ -77,13 +84,12 @@ function parse_config() {
         RSYNC_OPTIONS="$val"
     fi
 
-    declare -ga CNF_PRFS
-    declare -ga CNF_PRFS_SRCS
-    declare -ga CNF_PRFS_TRGS
-    declare -ga CNF_PRFS_FREQUENCIES
-    declare -ga CNF_PRFS_RETENTIONS
-    declare -ga CNF_PRFS_RSYNCS
-    declare -ga CNF_PRFS_RSYNC_OPTS
+    CNF_PRFS_SRCS=()
+    CNF_PRFS_TRGS=()
+    CNF_PRFS_FREQUENCIES=()
+    CNF_PRFS_RETENTIONS=()
+    CNF_PRFS_RSYNCS=()
+    CNF_PRFS_RSYNC_OPTS=()
     CNF_PRFS=($(jq -j '.backups | keys | join(" ")' "$CNF"))
 
     for p in "${CNF_PRFS[@]}"; do
