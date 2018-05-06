@@ -163,6 +163,9 @@ for prf in "${RUN_PROFILES[@]}"; do
     bakdir="${CNF_PRFS_TRGS[$PROF_NUM]}"
 
     bakname="$(basename "$src").$(date +%F_%H-%M-%S)"
+    if [ -e "$bakdir/$bakname" ]; then
+        bakname="$bakname+"
+    fi
 
     # Canonicalize source and backup dir and check for existence
     if ! src="$(readlink -f "$src")" || [ ! -d "$src" ]; then
@@ -193,10 +196,11 @@ for prf in "${RUN_PROFILES[@]}"; do
 
     if [ -e "$bakdir/latest" ]; then
         linkdest="$(readlink -f "$bakdir/latest")"
-        $RSYNC -aHAXx --link-dest="$linkdest" $RSYNC_OPTIONS "$src/" "$dest"
+        $RSYNC -aHAXx --link-dest="$linkdest" $RSYNC_OPTIONS "$src/" "$dest.partial"
     else
-        $RSYNC -aHAXx $RSYNC_OPTIONS "$src/" "$dest"
+        $RSYNC -aHAXx $RSYNC_OPTIONS "$src/" "$dest.partial"
     fi
+    mv "$dest.partial" "$dest"
 
     echo
     echo "Linking latest backup"
