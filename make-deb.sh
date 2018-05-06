@@ -20,10 +20,17 @@ if [ ! -e "$KSUTILS_PATH/dpkg-build-utils.sh" ]; then
     >&2 echo "   place to look for this file, just export the 'KSUTILS_PATH' environment"
     >&2 echo "   variable.)"
     >&2 echo
-    exit 1
+    exit 2
 else
     . "$KSUTILS_PATH/dpkg-build-utils.sh"
 fi
+
+if ! command -v dpkg &>/dev/null; then
+    >&2 echo
+    >&2 echo "E: Your system doesn't appear to have dpkg installed. Dpkg is required"
+    >&2 echo "   for creating debian packages."
+    >&2 echo
+    exit 3
 
 
 builddir=build
