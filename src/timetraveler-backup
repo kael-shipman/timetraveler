@@ -191,9 +191,9 @@ for prf in "${RUN_PROFILES[@]}"; do
     dest="$bakdir/$bakname"
 
     echo
-    echo "Creating backup of '$src' at '$dest'...."
-    echo
+    echo "Creating backup of '$src' at '$dest'"
 
+    echo " - copying files..."
     if [ -e "$bakdir/latest" ]; then
         linkdest="$(readlink -f "$bakdir/latest")"
         $RSYNC -aHAXx --link-dest="$linkdest" $RSYNC_OPTIONS "$src/" "$dest.partial"
@@ -202,10 +202,13 @@ for prf in "${RUN_PROFILES[@]}"; do
     fi
     mv "$dest.partial" "$dest"
 
-    echo
-    echo "Linking latest backup"
+    echo " - linking latest backup"
     ln -snf "$bakname" "$bakdir/latest"
 
+    echo " - removing write permissions"
+    chmod -R ugo-w "$dest"
+
+    echo
     echo "Completed backup for profile '$prf'"
 
 
