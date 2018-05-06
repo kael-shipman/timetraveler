@@ -1,8 +1,6 @@
 #!/bin/bash
 
 if [ "$1" != "upgrade" ]; then
-    find /etc/systemd/system/ -name 'timetraveler-*' | while read unit; do
-        systemctl disable --now "$(basename "$unit")"
-    done
+    systemctl disable --now timetraveler-scan-config.timer
 fi
 

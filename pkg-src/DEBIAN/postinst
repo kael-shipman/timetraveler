@@ -10,17 +10,6 @@ fi
 # Only run on fresh install or reconfigure
 if [ "$ACTION" != 'triggered' ] && ([ -z "$2" ] || [ "$ACTION" != 'configure' ]); then
     systemctl daemon-reload
-
-    if [ -n "$SUDO_USER" ]; then
-        systemctl enable --now "timetraveler-scan-config@$SUDO_USER.timer"
-    else
-        >&2 echo
-        >&2 echo "W: Not enabling timetraveler scan-config because you're running"
-        >&2 echo "   your setup as the root user, rather than with sudo."
-        >&2 echo
-        >&2 echo "   To enable regular config scanning, just run"
-        >&2 echo "   systemctl enable --now timetraveler-scan-config@\$USER.timer"
-        >&2 echo
-    fi
+    systemctl enable --now "timetraveler-scan-config.timer"
 fi
 
