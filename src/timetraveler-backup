@@ -14,7 +14,7 @@ if [ "$lib_loaded" != "true" ]; then
     >&2 echo "E: Couldn't find timetraveler libraries! Are you sure you've installed"
     >&2 echo "   timetraveler correctly?"
     >&2 echo
-    exit 1
+    exit 17
 fi
 
 
@@ -76,7 +76,7 @@ while test $# -gt 0; do
                 >&2 echo "E: Illegal command or option '$1'"
                 >&2 echo
                 show_backup_help >&2
-                exit 1
+                exit 18
             fi
         ;;
     esac
@@ -89,14 +89,14 @@ if [ -z ${PROFILE+x} ]; then
     >&2 echo "E: You must provide a valid backup profile to run, or 'all' to run all backups"
     >&2 echo
     show_backup_help >&2
-    exit 2
+    exit 19
 fi
 
 
 
 # Parse config file and check dependencies
 
-verify_config # Sets TT_CONF_FILE
+verify_config "$HOME" # Sets TT_CONF_FILE
 parse_config "$TT_CONF_FILE" # Sets CNF_PRFS* variables
 
 
@@ -139,7 +139,7 @@ for prf in "${RUN_PROFILES[@]}"; do
         >&2 echo "E: The profile you've specified ('$prf') does not appear to be"
         >&2 echo "   defined in your config file. ($PROF_NUM -ge ${#CNF_PRFS[@]})"
         >&2 echo
-        exit 7
+        exit 20
     fi
 
 
@@ -170,14 +170,14 @@ for prf in "${RUN_PROFILES[@]}"; do
         >&2 echo "E: The source directory you've specified doesn't exist! Is it on removable"
         >&2 echo "   media? (Source: $src)"
         >&2 echo
-        exit 8
+        exit 21
     fi
     if ! bakdir="$(readlink -f "$bakdir")"; then
         >&2 echo
         >&2 echo "E: The backup directory you've specified doesn't exist! Is it on removable"
         >&2 echo "   media? (Dir: $bakdir)"
         >&2 echo
-        exit 8
+        exit 22
     fi
 
     # If the backup directory doesn't exist, create it

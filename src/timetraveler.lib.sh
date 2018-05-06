@@ -41,6 +41,7 @@ function verify_config() {
         >&2 echo "E: You must pass a home directory as the only argument to this"
         >&2 echo "   function. (You passed '$cnf_home')"
         >&2 echo
+        exit 11
     fi
     TT_CONF_DIR="$cnf_home/.config/timetraveler"
     TT_CONF_FILE="$TT_CONF_DIR/config"
@@ -53,13 +54,20 @@ function verify_config() {
         >&2 echo "   backup profiles, in it. (See https://github.com/kael-shipman/timetraveler for"
         >&2 echo "   more information about config.)"
         >&2 echo
-        exit 3
+        exit 12
     else
         if ! jq="$(command -v jq)"; then
             >&2 echo
             >&2 echo "E: You must have \`jq\` installed on your machine to use timetraveler."
             >&2 echo
-            exit 4
+            exit 13
+        fi
+
+        if ! jq . "$TT_CONF_FILE" >/dev/null; then
+            >&2 echo
+            >&2 echo "E: Your config file has errors."
+            >&2 echo
+            exit 25
         fi
     fi
 }
@@ -70,7 +78,7 @@ function parse_config() {
         >&2 echo
         >&2 echo "E: You need to pass the config file path as an argument to the parse_config function."
         >&2 echo
-        exit 5
+        exit 14
     fi
 
     # Rsync command
@@ -97,13 +105,13 @@ function parse_config() {
             >&2 echo
             >&2 echo "E: Required value 'source' missing for backup profile '$p'"
             >&2 echo
-            exit 6
+            exit 15
         fi
         if ! CNF_PRFS_TRGS[${#CNF_PRFS_TRGS[@]}]="$(jq -ej '.backups["'$p'"].target' "$CNF")"; then
             >&2 echo
             >&2 echo "E: Required value 'target' missing for backup profile '$p'"
             >&2 echo
-            exit 6
+            exit 16
         fi
         CNF_PRFS_FREQUENCIES[${#CNF_PRFS_FREQUENCIES[@]}]="$(jq -j '.backups["'$p'"].frequency' "$CNF")"
         CNF_PRFS_RETENTIONS[${#CNF_PRFS_RETENTIONS[@]}]="$(jq -j '.backups["'$p'"].retention' "$CNF")"

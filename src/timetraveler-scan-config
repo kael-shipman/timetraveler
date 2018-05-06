@@ -14,7 +14,7 @@ if [ "$lib_loaded" != "true" ]; then
     >&2 echo "E: Couldn't find timetraveler libraries! Are you sure you've installed"
     >&2 echo "   timetraveler correctly?"
     >&2 echo
-    exit 1
+    exit 23
 fi
 
 
@@ -51,7 +51,7 @@ while test $# -gt 0; do
             >&2 echo "E: Illegal command or option '$1'"
             >&2 echo
             show_scanconfig_help >&2
-            exit 1
+            exit 24
         ;;
     esac
 done
@@ -64,7 +64,7 @@ done
 # If user, just update the user's config
 # If system, update all users' configs
 
-if [ -n "$SUDO_USER" ]; then
+if [ "$USER" != "root" ] || [ -n "$SUDO_USER" ]; then
     mode="single"
     homes=( "$HOME" )
 else
@@ -82,16 +82,24 @@ fi
 
 
 # TODO: Make this resilient to whitespace
-for home in $homes; do
+for home in ${homes[@]}; do
     u="$(basename "$home")"
+    sysddir="$home/.config/systemd/user"
+
+    # First clear all current systemd files, if existing
+    if [ -d "$sysddir" ]; then
+        rm "$sysddir"/timetraveler* 2>/dev/null || true
+        rm "$sysddir"/timers.target.wants/timetraveler* 2>/dev/null || true
+    fi
+
+    # Now make sure it makes sense to proceed
     if [ ! -e "$home/.config/timetraveler" ] && [ "$mode" == "batch" ]; then
         >&2 echo "W: User '$u' doesn't have a timetraveler config. Skipping."
         continue
     fi
 
 
-    # Parse config file
-
+    # Verify and Parse user config file
     verify_config "$home" # Sets TT_CONF_FILE
     parse_config "$TT_CONF_FILE" # Sets CNF_PRFS* variables
 
@@ -99,18 +107,16 @@ for home in $homes; do
 
 
     # Now run through backup profiles and create systemd files
-
     pn=0
     declare -a ENABLE_TIMERS
-    echo "Making $home/.config/systemd"
     if [ "$u" == "$USER" ]; then
-        mkdir -p "$home/.config/systemd"
+        mkdir -p "$sysddir"
     else
-        su "$u" -c "mkdir -p '$home/.config/systemd'"
+        su "$u" -c "mkdir -p '$sysddir'"
     fi
     for prf in "${CNF_PRFS[@]}"; do
-        SERVICE_FILE=$home/.config/systemd/timetraveler-"$prf".service
-        TIMER_FILE=$home/.config/systemd/timetraveler-"$prf".timer
+        SERVICE_FILE="$sysddir/timetraveler-$prf.service"
+        TIMER_FILE="$sysddir/timetraveler-$prf.timer"
         INTERVAL="${CNF_PRFS_FREQUENCIES[$pn]}"
         if [ -z "$INTERVAL" ] || [ "$INTERVAL" == "null" ]; then
             INTERVAL="*-*-* 00:00"
@@ -129,7 +135,6 @@ for home in $homes; do
 Description=Timetraveler backup for profile '$prf'
 
 [Service]
-User=$u
 Type=simple
 ExecStart=$CMD backup "$prf"
 
@@ -138,7 +143,6 @@ EOF
         if [ "$u" == "$USER" ]; then
             mv /tmp/tt-service-file.tmp "$SERVICE_FILE"
         else
-            echo "Copying tt-service"
             su "$u" -c "cp /tmp/tt-service-file.tmp '$SERVICE_FILE'"
             rm /tmp/tt-service-file.tmp
         fi
@@ -149,8 +153,11 @@ EOF
             if [ "$u" == "$USER" ]; then
                 systemctl --user disable --now "$TIMER_FILE" 2>/dev/null || true
             else
-                echo "disabling timer"
-                su "$u" -c "systemctl --user disable --now '$TIMER_FILE' 2>/dev/null" || true
+                # Disable manually
+                rm "$sysddir/timers.target.wants/$(basename "$TIMER_FILE")" 2>/dev/null || true
+                if [ ! "$(ls -A "$sysddir/timers.target.wants")" ]; then
+                    rm "$sysddir/timers.target.wants"
+                fi
             fi
             rm "$TIMER_FILE" 2>/dev/null || true
 
@@ -176,8 +183,8 @@ EOF
             if [ "$u" == "$USER" ]; then
                 mv /tmp/tt-timer.tmp "$TIMER_FILE"
             else
-                echo "copying tt-timer"
                 su "$u" -c "cp /tmp/tt-timer.tmp '$TIMER_FILE'"
+                rm /tmp/tt-timer.tmp
             fi
         fi
     done
@@ -189,10 +196,10 @@ EOF
             systemctl --user enable --now "$timer"
         done
     else
-        echo "enabling timers"
-        su "$u" -c "systemctl --user daemon-reload"
         for timer in "${ENABLE_TIMERS[@]}"; do
-            su "$u" -c "systemctl --user enable --now '$timer'"
+            cmd="mkdir -p '$sysddir/timers.target.wants';"
+            cmd="$cmd ln -nsf '$timer' '$sysddir/timers.target.wants/';"
+            su "$u" -c "$cmd"
         done
     fi
 done

@@ -51,7 +51,7 @@ while test $# -gt 0; do
             >&2 echo "E: Illegal command or option '$1'"
             >&2 echo
             echo_usage >&2
-            exit 1
+            exit 2
         ;;
     esac
 done
@@ -64,7 +64,7 @@ if [ -z ${COMMAND+x} ]; then
     >&2 echo "E: You haven't passed a command!"
     >&2 echo
     echo_usage >&2
-    exit 2
+    exit 3
 fi
 
 
@@ -80,7 +80,7 @@ if ! CMD="$(command -v "timetraveler-$COMMAND")"; then
         >&2 echo "E: Couldn't find subcommand timetraveler-$COMMAND! Are you sure timetraveler"
         >&2 echo "   is properly installed?"
         >&2 echo
-        exit 3
+        exit 4
     fi
 fi
 
