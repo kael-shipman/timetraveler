@@ -50,7 +50,7 @@ cp src/{timetraveler,timetraveler-scan-config,timetraveler-backup} "$bindir/"
 
 sysddir="$pkgdir/lib/systemd/system"
 mkdir -p "$sysddir"
-cp conf/timetraveler-scan-config@.{service,timer} "$sysddir/"
+cp peripherals/timetraveler-scan-config@.{service,timer} "$sysddir/"
 
 
 
