@@ -31,7 +31,7 @@ if ! command -v dpkg &>/dev/null; then
     >&2 echo "   for creating debian packages."
     >&2 echo
     exit 3
-
+fi
 
 builddir=build
 pkgdir=build/deb
@@ -57,7 +57,7 @@ cp src/{timetraveler,timetraveler-scan-config,timetraveler-backup} "$bindir/"
 
 sysddir="$pkgdir/lib/systemd/system"
 mkdir -p "$sysddir"
-cp peripherals/timetraveler-scan-config@.{service,timer} "$sysddir/"
+cp peripherals/timetraveler-scan-config.{service,timer} "$sysddir/"
 
 
 
