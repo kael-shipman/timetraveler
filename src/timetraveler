@@ -2,7 +2,7 @@
 
 set -e
 D="$(dirname "$(readlink -f "$0")")"
-for libdir in "$TT_LIBDIR" /usr/share/timetraveler "$D"; do
+for libdir in "$D" "$TT_LIBDIR" /usr/share/timetraveler; do
     if [ -e "$libdir/timetraveler.lib.sh" ]; then
         . "$libdir/timetraveler.lib.sh"
         lib_loaded=true
@@ -71,11 +71,11 @@ fi
 
 # Run subcommand
 
-# See if it's on the path
-if ! CMD="$(command -v "timetraveler-$COMMAND")"; then
-    # Otherwise, see if it's in the same directory as the current file
-    CMD="$D/timetraveler-$COMMAND"
-    if [ ! -e "$CMD" ]; then
+# See if it's local
+CMD="$D/timetraveler-$COMMAND"
+if [ ! -x "$CMD" ]; then
+    # Otherwise, see if it's on the path
+    if ! CMD="$(command -v "timetraveler-$COMMAND")"; then
         >&2 echo
         >&2 echo "E: Couldn't find subcommand timetraveler-$COMMAND! Are you sure timetraveler"
         >&2 echo "   is properly installed?"

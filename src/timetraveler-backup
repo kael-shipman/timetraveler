@@ -2,7 +2,7 @@
 
 set -e
 D="$(dirname "$(readlink -f "$0")")"
-for libdir in "$TT_LIBDIR" /usr/share/timetraveler "$D"; do
+for libdir in "$D" "$TT_LIBDIR" /usr/share/timetraveler; do
     if [ -e "$libdir/timetraveler.lib.sh" ]; then
         . "$libdir/timetraveler.lib.sh"
         lib_loaded=true
@@ -159,33 +159,28 @@ for prf in "${RUN_PROFILES[@]}"; do
 
     # Do the backup
 
-    src="${CNF_PRFS_SRCS[$PROF_NUM]}"
-    bakdir="${CNF_PRFS_TRGS[$PROF_NUM]}"
+    # Get paths (removing trailing slashes)
+    src="${CNF_PRFS_SRCS[$PROF_NUM]%/}"
+    bakdir="${CNF_PRFS_TRGS[$PROF_NUM]%/}"
 
-    bakname="$(basename "$src").$(date +%F_%H-%M-%S)"
-    if [ -e "$bakdir/$bakname" ]; then
+    # Generate the name of the new backup: basename of src plus current datetime, plus optional collision preventer
+    bakname="$(basename "$(echo "$src" | sed -r "s/^[^/]+:(.+)$/\1/")").$(date +%F_%H-%M-%S)"
+    while path_exists "$bakdir/$bakname"; do
         bakname="$bakname+"
-    fi
+    done
 
-    # Canonicalize source and backup dir and check for existence
-    if ! src="$(readlink -f "$src")" || [ ! -d "$src" ]; then
+    # Verify existence of source
+    if ! path_exists "$src"; then
         >&2 echo
         >&2 echo "E: The source directory you've specified doesn't exist! Is it on removable"
         >&2 echo "   media? (Source: $src)"
         >&2 echo
         exit 21
     fi
-    if ! bakdir="$(readlink -f "$bakdir")"; then
-        >&2 echo
-        >&2 echo "E: The backup directory you've specified doesn't exist! Is it on removable"
-        >&2 echo "   media? (Dir: $bakdir)"
-        >&2 echo
-        exit 22
-    fi
 
     # If the backup directory doesn't exist, create it
-    if [ ! -d "$bakdir" ]; then
-        mkdir -p "$bakdir"
+    if ! path_exists "$bakdir"; then
+        tt_cmd "$bakdir" 'mkdir -p "::path::"'
     fi
 
     dest="$bakdir/$bakname"
@@ -194,19 +189,15 @@ for prf in "${RUN_PROFILES[@]}"; do
     echo "Creating backup of '$src' at '$dest'"
 
     echo " - copying files..."
-    if [ -e "$bakdir/latest" ]; then
-        linkdest="$(readlink -f "$bakdir/latest")"
-        $RSYNC -aHAXx --link-dest="$linkdest" $RSYNC_OPTIONS "$src/" "$dest.partial"
-    else
-        $RSYNC -aHAXx $RSYNC_OPTIONS "$src/" "$dest.partial"
+    if path_exists "$bakdir/latest"; then
+        RSYNC_OPTIONS="--link-dest=$(tt_cmd "$bakdir/latest" 'readlink -f "::path::"') $RSYNC_OPTIONS"
     fi
-    mv "$dest.partial" "$dest"
+    RSYNC_OPTIONS="-aHAXx --chmod=ugo-w $RSYNC_OPTIONS"
+    $RSYNC $RSYNC_OPTIONS "$src/" "$dest.partial"
+    tt_cmd "$dest" 'mv -f "::path::.partial" "::path::"'
 
     echo " - linking latest backup"
-    ln -snf "$bakname" "$bakdir/latest"
-
-    echo " - removing write permissions"
-    chmod -R ugo-w "$dest"
+    tt_cmd "$bakdir" 'ln -snf "'$bakname'" "::path::/latest"'
 
     echo
     echo "Completed backup for profile '$prf'"
