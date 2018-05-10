@@ -190,10 +190,10 @@ for prf in "${RUN_PROFILES[@]}"; do
 
     echo " - copying files..."
     if path_exists "$bakdir/latest"; then
-        RSYNC_OPTIONS="--link-dest=$(tt_cmd "$bakdir/latest" 'readlink -f "::path::"') $RSYNC_OPTIONS"
+        RSYNC_OPTIONS="--link-dest="'"'"$(tt_cmd "$bakdir/latest" 'readlink -f "::path::"')"'"'" $RSYNC_OPTIONS"
     fi
     RSYNC_OPTIONS="-aHAXx --chmod=ugo-w $RSYNC_OPTIONS"
-    $RSYNC $RSYNC_OPTIONS "$src/" "$dest.partial"
+    eval "$RSYNC $RSYNC_OPTIONS '$src/' '$dest.partial'"
     tt_cmd "$dest" 'mv -f "::path::.partial" "::path::"'
 
     echo " - linking latest backup"

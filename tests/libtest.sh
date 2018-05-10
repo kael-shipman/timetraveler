@@ -16,113 +16,184 @@ fi
 
 . "$inc"
 
-n=1
+# Set config variables, then override if possible
 
-path="kael@kaelshipman.me:/some/path"
-if path_is_remote "$path"; then
-    echo "$n. PASSED: remote path '$path' detected"
-else
-    echo "$n. **FAILED**: remote path '$path' not detected"
+TT_TEST_REMOTE_HOST=kaelshipman.me
+TT_TEST_REMOTE_PATH_IN_HOME=.profile
+
+if [ -e ~/.config/timetraveler/test-config.sh ]; then
+    . ~/.config/timetraveler/test-config.sh
 fi
-((n++))
 
-path="/some/crazy:delim/localpath"
-if ! path_is_remote "$path"; then
-    echo "$n. PASSED: local path '$path' detected"
-else
-    echo "$n. **FAILED**: local path '$path' not detected"
-fi
-((n++))
 
-path=/tmp
-if path_exists "$path"; then
-    echo "$n. PASSED: local path '$path' existence confirmed"
-else
-    echo "$n. **FAILED**: local path '$path' should have been found"
-fi
-((n++))
+test_path_is_remote_handles_normal_paths() {
+    local path
 
-path=/nonexistent
-if ! path_exists "$path"; then
-    echo "$n. PASSED: local nonexistent path '$path' confirmed not to exist"
-else
-    echo "$n. **FAILED**: local nonexistent path '$path' shouldn't have been found"
-fi
-((n++))
+    # local path
+    path="/some/crazy:delim/localpath"
+    assert_status_code 1 'path_is_remote "'$path'"' "Local path '$path' should be identified as local"
 
-path="kaelshipman.me:/tmp"
-if path_exists "$path"; then
-    echo "$n. PASSED: remote path '$path' confirmed to exist"
-else
-    echo "$n. **FAILED**: remote path '$path' not correctly detected"
-fi
-((n++))
+    # remote path
+    path="kael@kaelshipman.me:/some/path"
+    assert_status_code 0 'path_is_remote "'$path'"' "Remote path '$path' should be identified as remote"
+}
 
-path="kaelshipman.me:Documents"
-if path_exists "$path"; then
-    echo "$n. PASSED: remote path '$path' confirmed to exist"
-else
-    echo "$n. **FAILED**: remote path '$path' not correctly detected"
-fi
-((n++))
+test_path_is_remote_handles_paths_with_spaces() {
+    local path
+    local cmd
 
-path="kaelshipman.me:nope"
-if ! path_exists "$path"; then
-    echo "$n. PASSED: remote path '$path' correctly not found"
-else
-    echo "$n. **FAILED**: remote path '$path' incorrectly detected"
-fi
-((n++))
+    # local path
+    path="/some/crazy:delim/localpath/with spaces"
+    cmd="path_is_remote '"$path"'"
+    assert_status_code 1 'path_is_remote "'$path'"' "Local path '$path' should be identified as local"
 
-path="kaelshipman.me:/path/to/nowhere"
-if ! path_exists "$path"; then
-    echo "$n. PASSED: remote path '$path' correctly not found"
-else
-    echo "$n. **FAILED**: remote path '$path' incorrectly detected"
-fi
-((n++))
+    # remote path
+    path="kael@kaelshipman.me:/some/path with spaces"
+    cmd="path_is_remote '"$path"'"
+    assert_status_code 0 "$cmd" "Remote path '$path' should be identified as remote"
+}
 
-path="/tmp/some/long/path"
-tt_cmd "$path" 'mkdir -p "::path::"'
-if [ -e "$path" ]; then
-    echo "$n. PASSED: local path '$path' created"
+todo_test_path_is_remote_handles_paths_with_special_chars() {
+    local path
+    local cmd
+
+    # local
+    path="/some/path with spaces/& some/'special!' "'"'"chars"'"'"/path"
+    cmd="path_is_remote '"$(echo "$path" | sed "s/'/'"'"'"'"'"'"'/g")"'"
+    assert_status_code 1 "$cmd" "Local path '$path' should be identified as local"
+
+    # remote
+    path="kael@kaelshipman.me:/some/path with spaces/& some/'special!' "'"'"chars"'"'"/path"
+    cmd="path_is_remote '"$(echo "$path" | sed "s/'/'"'"'"'"'"'"'/g")"'"
+    assert_status_code 0 "$cmd" "Remote path '$path' should be identified as remote"
+}
+
+test_path_is_remote_complains_with_bad_arguments() {
+    assert_status_code 26 "path_is_remote '/this is a/path/with/spaces' 'but this is just a string'" "Should have complained for multiple arguments"
+    assert_status_code 26 "path_is_remote" "Should have complained with no arguments"
+}
+
+test_path_exists_with_valid_paths() {
+    assert_status_code 0 "path_exists '/tmp'"
+    assert_status_code 0 "path_exists '$TT_TEST_REMOTE_HOST:/tmp'"
+    assert_status_code 0 "path_exists '$TT_TEST_REMOTE_HOST:$TT_TEST_REMOTE_PATH_IN_HOME'"
+}
+
+test_path_exists_with_nonexistent_paths() {
+    assert_status_code 1 "path_exists '/bunk'"
+    assert_status_code 1 "path_exists '$TT_TEST_REMOTE_HOST:/bunk'"
+    assert_status_code 1 "path_exists '$TT_TEST_REMOTE_HOST:bunk'"
+}
+
+test_path_exists_with_paths_with_spaces() {
+    local path="/tmp/path with spaces/here"
+
+    mkdir -p "$path"
+    assert_status_code 0 "path_exists '$path'"
+    rm -Rf "$path"
+
+    ssh "$TT_TEST_REMOTE_HOST" 'mkdir -p "'$path'"'
+    assert_status_code 0 "path_exists '$TT_TEST_REMOTE_HOST:$path'"
+    ssh "$TT_TEST_REMOTE_HOST" 'rm -Rf "'$path'"'
+}
+
+test_path_exists_with_bad_arguments() {
+    assert_status_code 26 "path_exists '/this is a/path/with/spaces' 'but this is just a string'" "Should have complained for multiple arguments"
+    assert_status_code 26 "path_exists" "Should have complained with no arguments"
+}
+
+todo_test_path_exists_with_special_chars() {
+    local path="/some/path with spaces/& some/'special!' "'"'"chars"'"'"/path"
+    local cmd
+
+    # local
+    mkdir -p "$path"
+    cmd="path_exists '"$(echo "$path" | sed "s/'/'"'"'"'"'"'"'/g")"'"
+    assert_status_code 0 "$cmd"
+
+    # remote
+    ssh "$TT_TEST_REMOTE_HOST" 'mkdir -p "'$path'"'
+    assert_status_code 0 "path_exists '$TT_TEST_REMOTE_HOST:$(echo "$path" | sed "s/'/'"'"'"'"'"'"'/g")'"
+    ssh "$TT_TEST_REMOTE_HOST" 'rm -Rf "'$path'"'
+}
+
+test_tt_cmd_can_make_normal_dirs() {
+    local path="/tmp/some/long/path"
+
+    tt_cmd "$path" 'mkdir -p "::path::"'
+    assert "test -e '$path'"
     rm -Rf /tmp/some
-else
-    echo "$n. **FAILED**: local path '$path' not created"
-fi
-((n++))
 
-path="kaelshipman.me:/tmp/some/long/path"
-tt_cmd "$path" 'mkdir -p "::path::"'
-if path_exists $path; then
-    echo "$n. PASSED: remote path '$path' created"
-    ssh "kaelshipman.me" "rm -Rf /tmp/some"
-else
-    echo "$n. **FAILED**: remote path '$path' not created"
-fi
-((n++))
+    local remoteAddr="$TT_TEST_REMOTE_HOST:$path"
+    tt_cmd "$remoteAddr" 'mkdir -p "::path::"'
+    assert "ssh '$TT_TEST_REMOTE_HOST' 'test -e "'"'"$path"'"'"'"
+    ssh "$TT_TEST_REMOTE_HOST" "rm -Rf '/tmp/some'"
+}
 
-toPath="/tmp/test"
-fromPath="$toPath.partial"
-tt_cmd "$fromPath" 'mkdir -p "'$fromPath'"'
-tt_cmd "$fromPath" 'mv "'$fromPath'" "'$toPath'"'
-if path_exists "$toPath"; then
-    echo "$n. PASSED: local path '$fromPath' moved to '$toPath'"
-    rm -Rf "$toPath"
-else
-    echo "$n. **FAILED**: local path '$fromPath' not moved to '$toPath'"
-fi
-((n++))
+test_tt_cmd_can_make_dirs_with_spaces() {
+    local path="/tmp/some/long path with/some spaces"
 
-toPath="kaelshipman.me:/tmp/test"
-fromPath="$toPath.partial"
-tt_cmd "$fromPath" 'mkdir -p "'$fromPath'"'
-tt_cmd "$fromPath" 'mv "'$fromPath'" "'$toPath'"'
-if path_exists "$toPath"; then
-    echo "$n. PASSED: remote path '$fromPath' moved to '$toPath'"
-    rm -Rf "$toPath"
-else
-    echo "$n. **FAILED**: remote path '$fromPath' not moved to '$toPath'"
-fi
-((n++))
+    tt_cmd "$path" 'mkdir -p "::path::"'
+    assert "test -e '$path'"
+    rm -Rf /tmp/some
+
+    local remoteAddr="$TT_TEST_REMOTE_HOST:$path"
+    tt_cmd "$remoteAddr" 'mkdir -p "::path::"'
+    assert "ssh '$TT_TEST_REMOTE_HOST' 'test -e "'"'"$path"'"'"'"
+    ssh "$TT_TEST_REMOTE_HOST" "rm -Rf '/tmp/some'"
+}
+
+todo_test_tt_cmd_can_make_dirs_with_special_chars() {
+    assert_fail
+}
+
+test_tt_cmd_can_move_normal_dirs() {
+    local toPath="/tmp/test"
+    local fromPath="$toPath.partial"
+
+    # just in case...
+    tt_cmd "$toPath" 'rm -Rf "::path::"'
+
+    tt_cmd "$fromPath" 'mkdir -p "::path::"'
+    tt_cmd "$fromPath" 'mv "::path::" "'"$toPath"'"'
+    assert 'path_exists "'"$toPath"'"'
+
+    tt_cmd "$toPath" 'rm -Rf "::path::"'
+
+    # just in case...
+    tt_cmd "$TT_TEST_REMOTE_HOST:$toPath" 'rm -Rf "::path::"'
+
+    tt_cmd "$TT_TEST_REMOTE_HOST:$fromPath" 'mkdir -p "::path::"'
+    tt_cmd "$TT_TEST_REMOTE_HOST:$fromPath" 'mv "::path::" "'"$toPath"'"'
+    assert 'path_exists "'"$TT_TEST_REMOTE_HOST:$toPath"'"'
+
+    tt_cmd "$TT_TEST_REMOTE_HOST:$toPath" 'rm -Rf "::path::"'
+}
+
+test_tt_cmd_can_move_dirs_with_spaces() {
+    local toPath="/tmp/test dir with/spaces"
+    local fromPath="$toPath.partial"
+
+    # just in case...
+    tt_cmd "$toPath" 'rm -Rf "::path::"'
+
+    tt_cmd "$fromPath" 'mkdir -p "::path::"'
+    tt_cmd "$fromPath" 'mv "::path::" "'"$toPath"'"'
+    assert 'path_exists "'"$toPath"'"'
+
+    tt_cmd "$toPath" 'rm -Rf "::path::"'
+
+    # just in case...
+    tt_cmd "$TT_TEST_REMOTE_HOST:$toPath" 'rm -Rf "::path::"'
+
+    tt_cmd "$TT_TEST_REMOTE_HOST:$fromPath" 'mkdir -p "::path::"'
+    tt_cmd "$TT_TEST_REMOTE_HOST:$fromPath" 'mv "::path::" "'"$toPath"'"'
+    assert 'path_exists "'"$TT_TEST_REMOTE_HOST:$toPath"'"'
+
+    tt_cmd "$TT_TEST_REMOTE_HOST:$toPath" 'rm -Rf "::path::"'
+}
+
+todo_test_tt_cmd_can_move_dirs_with_special_chars() {
+    assert_fail
+}
 

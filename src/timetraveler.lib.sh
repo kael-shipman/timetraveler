@@ -162,16 +162,17 @@ function require_param_path() {
         >&2 echo
         exit 26
     fi
-    echo "$path"
 }
 
 function path_is_remote() {
-    local path="$(require_param_path $@)"
+    require_param_path "$@"
+    local path="$1"
     echo "$path" | egrep -c "^[^/]+:.+$" &>/dev/null
 }
 
 function path_exists() {
-    local path="$(require_param_path $@)"
+    require_param_path "$@"
+    local path="$1"
 
     if path_is_remote "$path"; then
         local host="$(echo "$path" | sed -r "s/^([^:]+).*$/\1/")"
