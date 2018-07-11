@@ -2,9 +2,9 @@
 
 set -e
 D="$(dirname "$(readlink -f "$0")")"
-for libdir in "$D" "$TT_LIBDIR" /usr/share/timetraveler; do
-    if [ -e "$libdir/timetraveler.lib.sh" ]; then
-        . "$libdir/timetraveler.lib.sh"
+for libdir in "$D/../lib/timetraveler" "$TT_LIBDIR" /usr/lib/timetraveler; do
+    if [ -e "$libdir/libtimetraveler.sh" ]; then
+        . "$libdir/libtimetraveler.sh"
         lib_loaded=true
         break
     fi

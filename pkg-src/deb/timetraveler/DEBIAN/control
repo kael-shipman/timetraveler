@@ -3,7 +3,7 @@ Version: ::VERSION::
 Section: free
 Priority: optional
 Architecture: all
-Depends: jq
+Depends: jq, ks-std-libs
 Installed-Size: 0
 Maintainer: Kael Shipman <kael.shipman@gmail.com>
 Description: A TimeMachine knockoff for *nix
