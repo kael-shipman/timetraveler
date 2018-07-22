@@ -2,21 +2,8 @@
 
 set -e
 D="$(dirname "$(readlink -f "$0")")"
-for libdir in "$D/../lib/timetraveler" "$TT_LIBDIR" /usr/lib/timetraveler; do
-    if [ -e "$libdir/libtimetraveler.sh" ]; then
-        . "$libdir/libtimetraveler.sh"
-        lib_loaded=true
-        break
-    fi
-done
-if [ "$lib_loaded" != "true" ]; then
-    >&2 echo
-    >&2 echo "E: Couldn't find timetraveler libraries! Are you sure you've installed"
-    >&2 echo "   timetraveler correctly?"
-    >&2 echo
-    exit 17
-fi
-
+. require libtimetraveler.sh "$D/../lib/timetraveler" "$TT_LIBDIR" /usr/lib/timetraveler
+. require librexec.sh "$KSSTDLIBDIR" /usr/lib/ks-std-libs
 
 function show_backup_help() {
     {
@@ -180,7 +167,7 @@ for prf in "${RUN_PROFILES[@]}"; do
 
     # If the backup directory doesn't exist, create it
     if ! path_exists "$bakdir"; then
-        tt_cmd "$bakdir" 'mkdir -p "::path::"'
+        rexec "$bakdir" 'mkdir -p "::path::"'
     fi
 
     dest="$bakdir/$bakname"
@@ -190,14 +177,14 @@ for prf in "${RUN_PROFILES[@]}"; do
 
     echo " - copying files..."
     if path_exists "$bakdir/latest"; then
-        RSYNC_OPTIONS="--link-dest="'"'"$(tt_cmd "$bakdir/latest" 'readlink -f "::path::"')"'"'" $RSYNC_OPTIONS"
+        RSYNC_OPTIONS="--link-dest="'"'"$(rexec "$bakdir/latest" 'readlink -f "::path::"')"'"'" $RSYNC_OPTIONS"
     fi
     RSYNC_OPTIONS="-aHAXx --chmod=ugo-w $RSYNC_OPTIONS"
     eval "$RSYNC $RSYNC_OPTIONS '$src/' '$dest.partial'"
-    tt_cmd "$dest" 'mv -f "::path::.partial" "::path::"'
+    rexec "$dest" 'mv -f "::path::.partial" "::path::"'
 
     echo " - linking latest backup"
-    tt_cmd "$bakdir" 'ln -snf "'$bakname'" "::path::/latest"'
+    rexec "$bakdir" 'ln -snf "'$bakname'" "::path::/latest"'
 
     echo
     echo "Completed backup for profile '$prf'"

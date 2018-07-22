@@ -2,20 +2,7 @@
 
 set -e
 D="$(dirname "$(readlink -f "$0")")"
-for libdir in "$D/../lib/timetraveler" "$TT_LIBDIR" /usr/lib/timetraveler; do
-    if [ -e "$libdir/libtimetraveler.sh" ]; then
-        . "$libdir/libtimetraveler.sh"
-        lib_loaded=true
-        break
-    fi
-done
-if [ "$lib_loaded" != "true" ]; then
-    >&2 echo
-    >&2 echo "E: Couldn't find timetraveler libraries! Are you sure you've installed"
-    >&2 echo "   timetraveler correctly?"
-    >&2 echo
-    exit 1
-fi
+. require libtimetraveler.sh "$D/../lib/timetraveler" "$TT_LIBDIR" /usr/lib/timetraveler
 
 
 export TT_VERSION="::VERSION::"
