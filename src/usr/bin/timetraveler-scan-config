@@ -13,9 +13,9 @@ function show_scanconfig_help() {
         echo " DESCRIPTION"
         echo "      (Re)Scan timetraveler configuration file and rebuild systemd timers accordingly."
         echo
-        echo "      Timetraveler uses systemd tiemrs to implement backup scheduling. Timers are"
+        echo "      Timetraveler uses systemd timers to implement backup scheduling. Timers are"
         echo "      specified in the 'frequency' key of each backup profile (or default to once weekly,"
-        echo "      '*-*-1 00:00') and are defined according to systemd's 'OnCalendar' specification."
+        echo "      'Sun *-*-* 00:00') and are defined according to systemd's 'OnCalendar' specification."
         echo
         echo "      See https://wiki.archlinux.org/index.php/Systemd/Timers for more information."
         echo
@@ -52,7 +52,11 @@ done
 
 if [ "$USER" != "root" ] || [ -n "$SUDO_USER" ]; then
     mode="single"
-    homes=( "$HOME" )
+    if [ -n "$SUDO_USER" ]; then
+        homes=( "/home/$SUDO_USER" )
+    else
+        homes=( "$HOME" )
+    fi
 else
     mode="batch"
     declare -a homes
@@ -65,22 +69,45 @@ else
 fi
 
 
+sysddir="/etc/systemd/system"
+mkdir -p "$sysddir"
+
+function clear_deletables() {
+    if [ -n "$to_delete" ]; then
+        while read delete_file; do
+            local base="$(basename "$delete_file" .timer)"
+            if [ -n "$base" ]; then
+                systemctl disable --now "${base}.timer"
+                rm "$sysddir/${base}"* 2>/dev/null || true
+            fi
+        done <<< "$to_delete"
+    fi
+}
+
+
+declare -a ENABLE_TIMERS
 
 
 # TODO: Make this resilient to whitespace
 for home in ${homes[@]}; do
     u="$(basename "$home")"
-    sysddir="$home/.config/systemd/user"
 
-    # First clear all current systemd files, if existing
-    if [ -d "$sysddir" ]; then
-        rm "$sysddir"/timetraveler* 2>/dev/null || true
-        rm "$sysddir"/timers.target.wants/timetraveler* 2>/dev/null || true
-    fi
+    # Get a list of all existing timers for this user and queue them for deletion
+    to_delete=
+    for f in "$sysddir"/timers.target.wants/timetraveler-"${u}"-*; do
+        if [ -f "$f" ]; then
+            if [ -z "$to_delete" ]; then
+                to_delete="$f"
+            else
+                to_delete="$to_delete"$'\n'"$f"
+            fi
+        fi
+    done
 
     # Now make sure it makes sense to proceed
     if [ ! -e "$home/.config/timetraveler" ] && [ "$mode" == "batch" ]; then
         >&2 echo "W: User '$u' doesn't have a timetraveler config. Skipping."
+        clear_deletables
         continue
     fi
 
@@ -94,15 +121,9 @@ for home in ${homes[@]}; do
 
     # Now run through backup profiles and create systemd files
     pn=0
-    declare -a ENABLE_TIMERS
-    if [ "$u" == "$USER" ]; then
-        mkdir -p "$sysddir"
-    else
-        su "$u" -c "mkdir -p '$sysddir'"
-    fi
     for prf in "${CNF_PRFS[@]}"; do
-        SERVICE_FILE="$sysddir/timetraveler-$prf.service"
-        TIMER_FILE="$sysddir/timetraveler-$prf.timer"
+        SERVICE_FILE="$sysddir/timetraveler-$u-$prf.service"
+        TIMER_FILE="$sysddir/timetraveler-$u-$prf.timer"
         INTERVAL="${CNF_PRFS_FREQUENCIES[$pn]}"
         if [ -z "$INTERVAL" ] || [ "$INTERVAL" == "null" ]; then
             INTERVAL="*-*-* 00:00"
@@ -115,47 +136,30 @@ for home in ${homes[@]}; do
         # Augment profile pointer
         !((pn++))
 
+        # If interval is special value "never", then just continue
+        if [ "$INTERVAL" == "never" ]; then
+            continue
+        fi
+
+        # Remove from "to_delete" list so we don't delete it
+        to_delete="$(echo "$to_delete" | grep -vF "$(basename "$TIMER_FILE")")" || true
+
         # Create service file
-        cat << EOF > /tmp/tt-service-file.tmp
+        cat << EOF > "$SERVICE_FILE"
 [Unit]
-Description=Timetraveler backup for profile '$prf'
+Description=Timetraveler backup for user '$u', profile '$prf'
 
 [Service]
 Type=simple
+User=$u
 ExecStart=$CMD backup "$prf"
 
 EOF
 
-        if [ "$u" == "$USER" ]; then
-            mv /tmp/tt-service-file.tmp "$SERVICE_FILE"
-        else
-            su "$u" -c "cp /tmp/tt-service-file.tmp '$SERVICE_FILE'"
-            rm /tmp/tt-service-file.tmp
-        fi
-
-
-        # If interval is special value "never", delete timer and move on
-        if [ "$INTERVAL" == "never" ]; then
-            if [ "$u" == "$USER" ]; then
-                systemctl --user disable --now "$TIMER_FILE" 2>/dev/null || true
-            else
-                # Disable manually
-                rm "$sysddir/timers.target.wants/$(basename "$TIMER_FILE")" 2>/dev/null || true
-                if [ ! "$(ls -A "$sysddir/timers.target.wants")" ]; then
-                    rm "$sysddir/timers.target.wants"
-                fi
-            fi
-            rm "$TIMER_FILE" 2>/dev/null || true
-
-        # Otherwise, add timer to list of timers to enable and (re)create timer unit file
-        else
-
-            # Add timer to list to enable
-            ENABLE_TIMERS[${#ENABLE_TIMERS[@]}]="$TIMER_FILE"
-
-            cat << EOF > /tmp/tt-timer.tmp
+        # Create timer file
+        cat << EOF > "$TIMER_FILE"
 [Unit]
-Description=Run timetraveler backup profile '$prf' on schedule
+Description=Run timetraveler backup profile '$prf' for user '$u' on schedule
 
 [Timer]
 OnCalendar=$INTERVAL
@@ -166,27 +170,16 @@ WantedBy=timers.target
 
 EOF
 
-            if [ "$u" == "$USER" ]; then
-                mv /tmp/tt-timer.tmp "$TIMER_FILE"
-            else
-                su "$u" -c "cp /tmp/tt-timer.tmp '$TIMER_FILE'"
-                rm /tmp/tt-timer.tmp
-            fi
-        fi
+        # Add timer to list to enable
+        ENABLE_TIMERS[${#ENABLE_TIMERS[@]}]="$TIMER_FILE"
     done
 
-    # Reload systemd and enable everything
-    if [ "$u" == "$USER" ]; then
-        systemctl --user daemon-reload
-        for timer in "${ENABLE_TIMERS[@]}"; do
-            systemctl --user enable --now "$timer"
-        done
-    else
-        for timer in "${ENABLE_TIMERS[@]}"; do
-            cmd="mkdir -p '$sysddir/timers.target.wants';"
-            cmd="$cmd ln -nsf '$timer' '$sysddir/timers.target.wants/';"
-            su "$u" -c "$cmd"
-        done
-    fi
+    clear_deletables
+done
+
+# Reload systemd and enable everything
+systemctl daemon-reload
+for timer in "${ENABLE_TIMERS[@]}"; do
+    systemctl enable --now "$timer"
 done
 
